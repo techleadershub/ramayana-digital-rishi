@@ -5,18 +5,14 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run build
-# Double check the build exists
-RUN ls -la /app/dist
 
 # Production stage
 FROM node:20-slim
 WORKDIR /app
-RUN npm install -g serve
-# Copy ALL contents from the build's dist folder directly into /app
-COPY --from=build /app/dist .
-# Verify the files are in the final image
-RUN ls -la /app
-
+# Install a specific version of serve for stability
+RUN npm install -g serve@14.2.3
+# Copy the entire dist folder instead of just contents
+COPY --from=build /app/dist ./dist
 EXPOSE $PORT
-# Serve the current directory (.) as a single-page app
-CMD ["sh", "-c", "serve -s . -l $PORT"]
+# Explicitly serve the dist folder with single-page-app routing
+CMD ["sh", "-c", "serve -s dist -l $PORT"]
