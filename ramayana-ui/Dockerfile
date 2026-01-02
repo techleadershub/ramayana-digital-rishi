@@ -9,8 +9,8 @@ RUN npm run build
 # Production stage
 FROM node:20-slim
 WORKDIR /app
-# Use npx directly in the CMD to avoid global install issues, 
-# and explicitly bind to 0.0.0.0
 COPY --from=build /app/dist ./dist
+# Railway provides $PORT
 EXPOSE $PORT
-CMD ["npx", "-y", "serve", "-s", "dist", "-l", "0.0.0.0:$PORT"]
+# Use shell form to ensure $PORT is correctly expanded by the environment
+CMD npx -y serve -s dist -l $PORT
