@@ -1,0 +1,49 @@
+# Exclude large directories that shouldn't be in the Docker image
+qdrant_storage_docker/
+qdrant_storage/
+ramayana-ui/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Exclude data files (should be ingested, not shipped)
+Valmiki_Ramayan_Shlokas.json
+*.db
+*.sqlite
+ramayana_agent.db
+
+# Exclude build artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Exclude logs
+*.log
+ingestion.log
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Exclude environment files
+.env
+.env.local
+
+# Exclude test files
+tests/
+*.test.py
+
+# Exclude documentation
+*.md
+!README.md
+posters/
+
+# Exclude verification scripts (not needed in production)
+verify_ingestion.py
+

@@ -1,0 +1,18 @@
+# Nixpacks configuration to optimize build
+[phases.setup]
+nixPkgs = ["python3", "pip"]
+
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  # Install CPU-only PyTorch first to reduce image size (~500MB vs ~2GB)
+  "pip install torch --index-url https://download.pytorch.org/whl/cpu",
+  "pip install -r requirements.txt"
+]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "uvicorn agent_api.server:app --host 0.0.0.0 --port $PORT"
+

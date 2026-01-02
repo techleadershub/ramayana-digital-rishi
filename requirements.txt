@@ -1,8 +1,12 @@
+# Core dependencies
 qdrant-client
 sentence-transformers
 pyyaml
 tqdm
 numpy
+# Note: torch will be installed by sentence-transformers
+# For CPU-only PyTorch (smaller image), Railway should use:
+# pip install torch --index-url https://download.pytorch.org/whl/cpu
 torch
 fastapi
 uvicorn
