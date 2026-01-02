@@ -1,7 +1,24 @@
 import { useState, useRef } from 'react';
 
 // API URL (Assumes proxy or CORS)
-const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/chat_stream";
+// API URL (Resilient detection for production/dev)
+const getApiUrl = () => {
+  // 1. Check baked-in Vite variable
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  
+  // 2. If we are on a .railway.app domain, try to guess the backend sibling
+  // This is a backup for when build variables are tricky in Docker
+  if (window.location.hostname.includes('railway.app')) {
+     // Assuming the user might have named services similarly or we can just hope they set the var
+     // For now, we'll return a warning if missing
+     console.warn("VITE_API_URL missing! Using relative path as fallback.");
+     return ""; // Relative path /chat_stream (might work if proxied or on same domain)
+  }
+  
+  return "http://localhost:8000";
+};
+
+const API_URL = (getApiUrl()) + "/chat_stream";
 
 export const useAgent = () => {
   const [messages, setMessages] = useState([
