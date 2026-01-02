@@ -34,9 +34,37 @@ The easiest way is to use Railway's built-in Qdrant template.
 2. In **Settings**:
    - **Service Name**: `frontend`
    - **Root Directory**: `ramayana-ui`
+   - **Build Command**: (Leave empty - Dockerfile handles this)
+   - **Start Command**: (Leave empty - Dockerfile handles this)
 3. Add **Environment Variables**:
-   - `VITE_API_URL`: The public URL of your **Backend Service** (e.g., `https://your-backend.railway.app`).
-4. Railway will automatically build the static site.
+   - `VITE_API_URL`: The public URL of your **Backend Service** (e.g., `https://your-backend.railway.app`)
+   - **Important**: This must be set BEFORE the first build, as Vite bakes it into the build
+4. Railway will automatically detect the `Dockerfile` and `railway.json` in the `ramayana-ui` directory and build accordingly.
+
+### ⚠️ Troubleshooting Frontend Issues
+
+If the frontend shows a blank page after deployment:
+
+1. **Check Environment Variables**: Ensure `VITE_API_URL` is set correctly (no trailing slash)
+   - Example: `https://your-backend.railway.app` (NOT `https://your-backend.railway.app/`)
+
+2. **Verify Build Logs**: Check Railway build logs to ensure:
+   - Dockerfile is being used (not Nixpacks)
+   - Build completes successfully
+   - `VITE_API_URL` is available during build
+
+3. **Check Browser Console**: Open browser DevTools and check for:
+   - 404 errors for assets (CSS/JS files)
+   - CORS errors when calling the backend
+   - Network errors
+
+4. **Rebuild After Setting Variables**: If you set `VITE_API_URL` after the first build, you must trigger a new deployment:
+   - Go to **Deployments** tab
+   - Click **Redeploy** or push a new commit
+
+5. **Verify Service Worker**: The app uses a service worker. If issues persist:
+   - Clear browser cache
+   - Unregister service worker in DevTools > Application > Service Workers
 
 ---
 
