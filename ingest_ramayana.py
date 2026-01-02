@@ -60,18 +60,20 @@ class RamayanaIngestor:
         host = os.environ.get("QDRANT_HOST", qdrant_config.get('host', 'localhost'))
         port = int(os.environ.get("QDRANT_PORT", qdrant_config.get('port', 6333)))
         qdrant_url = os.environ.get("QDRANT_URL")
+        api_key = os.environ.get("QDRANT_API_KEY")
+        timeout = int(os.environ.get("QDRANT_TIMEOUT", 30))
         
         try:
             if mode == 'local':
                 storage_path = qdrant_config.get('path', './qdrant_storage')
                 self.logger.info(f"Using Qdrant in LOCAL mode with storage at: {storage_path}")
-                self.client = QdrantClient(path=storage_path)
+                self.client = QdrantClient(path=storage_path, timeout=timeout)
             elif qdrant_url:
                 self.logger.info(f"Using Qdrant via URL...")
-                self.client = QdrantClient(url=qdrant_url)
+                self.client = QdrantClient(url=qdrant_url, api_key=api_key, timeout=timeout)
             else:
                 self.logger.info(f"Using Qdrant in SERVER mode at {host}:{port}")
-                self.client = QdrantClient(host=host, port=port)
+                self.client = QdrantClient(host=host, port=port, api_key=api_key, timeout=timeout)
                 
                 # Test connection
                 self.logger.info("Testing Qdrant connection...")

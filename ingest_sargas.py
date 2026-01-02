@@ -16,13 +16,15 @@ def ingest_full_sargas():
     host = os.environ.get("QDRANT_HOST", config['qdrant'].get('host', 'localhost'))
     port = int(os.environ.get("QDRANT_PORT", config['qdrant'].get('port', 6333)))
     qdrant_url = os.environ.get("QDRANT_URL")
+    api_key = os.environ.get("QDRANT_API_KEY")
+    timeout = int(os.environ.get("QDRANT_TIMEOUT", 30))
 
     if mode == 'local':
-        client = QdrantClient(path=config['qdrant']['path'])
+        client = QdrantClient(path=config['qdrant']['path'], timeout=timeout)
     elif qdrant_url:
-        client = QdrantClient(url=qdrant_url)
+        client = QdrantClient(url=qdrant_url, api_key=api_key, timeout=timeout)
     else:
-        client = QdrantClient(host=host, port=port)
+        client = QdrantClient(host=host, port=port, api_key=api_key, timeout=timeout)
 
     collection_name = config['qdrant']['sarga_collection_name']
     

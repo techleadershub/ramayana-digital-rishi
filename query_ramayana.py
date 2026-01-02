@@ -118,16 +118,19 @@ class RamayanaSearcher:
         port = int(os.environ.get("QDRANT_PORT", qdrant_config.get('port', 6333)))
         qdrant_url = os.environ.get("QDRANT_URL") # For Railway public networks
         
+        api_key = os.environ.get("QDRANT_API_KEY")
+        timeout = int(os.environ.get("QDRANT_TIMEOUT", 30))
+        
         if mode == 'local':
             storage_path = qdrant_config.get('path', './qdrant_storage')
             print(f"Using Qdrant in LOCAL mode with storage at: {storage_path}")
-            self.client = QdrantClient(path=storage_path, timeout=10)
+            self.client = QdrantClient(path=storage_path, timeout=timeout)
         elif qdrant_url:
             print(f"Using Qdrant via URL...")
-            self.client = QdrantClient(url=qdrant_url, timeout=10)
+            self.client = QdrantClient(url=qdrant_url, api_key=api_key, timeout=timeout)
         else:
             print(f"Using Qdrant in SERVER mode at {host}:{port}")
-            self.client = QdrantClient(host=host, port=port, timeout=10)
+            self.client = QdrantClient(host=host, port=port, api_key=api_key, timeout=timeout)
         
         self.collection_name = qdrant_config['collection_name']
         self.sarga_collection_name = qdrant_config.get('sarga_collection_name', 'ramayana_sargas')

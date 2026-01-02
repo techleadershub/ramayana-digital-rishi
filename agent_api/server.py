@@ -78,14 +78,25 @@ def health_detailed():
             host = os.environ.get("QDRANT_HOST", qdrant_config.get('host', 'localhost'))
             port = int(os.environ.get("QDRANT_PORT", qdrant_config.get('port', 6333)))
             qdrant_url = os.environ.get("QDRANT_URL")
+            api_key = os.environ.get("QDRANT_API_KEY")
+            timeout = int(os.environ.get("QDRANT_TIMEOUT", 30))
             
-            # Create client with short timeout
-            if mode == 'local':
-                client = QdrantClient(path=qdrant_config.get('path', './qdrant_storage'), timeout=3)
-            elif qdrant_url:
-                client = QdrantClient(url=qdrant_url, timeout=3)
+            # Store connection info for error messages
+            connection_info = {}
+            if qdrant_url:
+                connection_info["type"] = "URL"
+                connection_info["value"] = qdrant_url
             else:
-                client = QdrantClient(host=host, port=port, timeout=3)
+                connection_info["type"] = "HOST:PORT"
+                connection_info["value"] = f"{host}:{port}"
+            
+            # Create client with timeout
+            if mode == 'local':
+                client = QdrantClient(path=qdrant_config.get('path', './qdrant_storage'), timeout=timeout)
+            elif qdrant_url:
+                client = QdrantClient(url=qdrant_url, api_key=api_key, timeout=timeout)
+            else:
+                client = QdrantClient(host=host, port=port, api_key=api_key, timeout=timeout)
             
             # Get collections
             collections = client.get_collections().collections
@@ -142,9 +153,13 @@ def health_detailed():
             result_queue.put(result)
             
         except Exception as e:
+            error_msg = str(e)
+            # Add connection info to error
+            if 'connection_info' in locals():
+                error_msg = f"{error_msg} (Trying to connect to {connection_info.get('type')}: {connection_info.get('value')})"
             result_queue.put({
                 "connected": False,
-                "error": str(e),
+                "error": error_msg,
                 "collections": {},
                 "ingestion": {"status": "unknown", "collections": {}}
             })
@@ -154,13 +169,24 @@ def health_detailed():
     thread = threading.Thread(target=check_qdrant, args=(result_queue,))
     thread.daemon = True
     thread.start()
-    thread.join(timeout=5)  # 5 second timeout
+    thread.join(timeout=35)  # 35 second timeout (increased for Railway)
     
     if thread.is_alive():
         # Thread is still running - timeout occurred
         health_status["status"] = "error"
         health_status["qdrant"]["connected"] = False
-        health_status["qdrant"]["error"] = "Connection timeout - Qdrant may be unreachable or slow"
+        
+        # Get connection info for the error message
+        qdrant_url = os.environ.get("QDRANT_URL")
+        host = os.environ.get("QDRANT_HOST", "localhost")
+        port = os.environ.get("QDRANT_PORT", "6333")
+        
+        if qdrant_url:
+            health_status["qdrant"]["error"] = f"Connection timeout after 35s - Check QDRANT_URL: {qdrant_url}"
+        else:
+            health_status["qdrant"]["error"] = f"Connection timeout after 35s - Check QDRANT_HOST: {host}:{port}"
+            
+        health_status["qdrant"]["troubleshooting"] = "Verify QDRANT_HOST/URL is correct and service is running. If using Railway Private Network, ensure the host matches your Qdrant service's private domain."
     else:
         # Thread completed
         try:
