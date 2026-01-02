@@ -1,0 +1,26 @@
+# Qdrant Configuration
+qdrant:
+  mode: "server"  # Options: "local" (file-based) or "server" (requires running Qdrant server)
+  path: "./qdrant_storage"  # Local storage path (only used in local mode)
+  host: "localhost"  # Only used in server mode
+  port: 6333  # Only used in server mode
+  collection_name: "ramayana_verses"
+  sarga_collection_name: "ramayana_sargas"
+  
+# Embedding Configuration
+embedding:
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"
+  # Alternative models:
+  # "sentence-transformers/all-mpnet-base-v2"  # Better quality, slower
+  # "BAAI/bge-small-en-v1.5"  # Good balance
+  batch_size: 32
+  
+# Data Configuration
+data:
+  source_file: "Valmiki_Ramayan_Shlokas.json"
+  skip_without_content: true  # Skip verses without translation AND explanation
+  
+# Processing Configuration
+processing:
+  show_progress: true
+  log_file: "ingestion.log"

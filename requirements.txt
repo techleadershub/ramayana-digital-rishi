@@ -1,0 +1,17 @@
+qdrant-client
+sentence-transformers
+pyyaml
+tqdm
+numpy
+torch
+fastapi
+uvicorn
+pydantic
+langchain
+langchain-openai
+langgraph
+langchain-community
+sqlalchemy
+openai
+python-multipart
+python-dotenv
