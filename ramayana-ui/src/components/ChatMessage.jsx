@@ -57,7 +57,9 @@ export default function ChatMessage({ message, onVerseClick }) {
                 shloka = dataNumbers[1];
             } else if (dataNumbers.length === 1) {
                 sarga = dataNumbers[0];
-                shloka = "1";
+                // CRITICAL FIX: If only one number exists (e.g. "Aranya Kanda 9"), it is a Sarga Ref. 
+                // Set shloka to "0" (Whole Chapter) so UI doesn't say ":1"
+                shloka = "0";
             }
             return `[[CIT:${cleanKanda}|${sarga}|${shloka}]]`;
         }
@@ -155,13 +157,19 @@ export default function ChatMessage({ message, onVerseClick }) {
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
+                                                // Prevent click for Chapter Refs
+                                                if (isChapterRef) return;
+
                                                 console.log("CRITICAL: Citation Clicked!", kanda, sarga, shloka);
-                                                // Backup alert to confirm code execution
-                                                // window.alert("Click detected for " + kanda); 
                                                 onVerseClick(kanda, sarga, shloka);
                                             }}
-                                            className="relative z-[1000] inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 text-xs font-bold hover:bg-orange-200 transition-all border border-orange-300 cursor-pointer shadow-sm pointer-events-auto"
-                                            title="Tap to read verse"
+                                            className={clsx(
+                                                "relative z-[1000] inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded-md text-xs font-bold transition-all border shadow-sm pointer-events-auto",
+                                                isChapterRef
+                                                    ? "bg-orange-50 text-orange-600 border-orange-100 cursor-default opacity-80" // Non-clickable style
+                                                    : "bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-300 cursor-pointer" // Clickable style
+                                            )}
+                                            title={isChapterRef ? "Chapter Summary" : "Tap to read verse"}
                                             type="button"
                                         >
                                             <Sparkles size={10} className="text-orange-500" />
