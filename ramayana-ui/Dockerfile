@@ -9,7 +9,8 @@ RUN npm run build
 # Production stage
 FROM node:20-slim
 WORKDIR /app
-RUN npm install -g serve
+# Use npx directly in the CMD to avoid global install issues, 
+# and explicitly bind to 0.0.0.0
 COPY --from=build /app/dist ./dist
 EXPOSE $PORT
-CMD ["sh", "-c", "serve -s dist -l $PORT"]
+CMD ["npx", "-y", "serve", "-s", "dist", "-l", "0.0.0.0:$PORT"]
