@@ -16,6 +16,8 @@ def extract_speaker(text):
 
 def ingest_data():
     print(f"Initializing Database...")
+    from database import DATABASE_URL
+    print(f"Using Database At: {DATABASE_URL}")
     init_db()
     
     json_path = "Valmiki_Ramayan_Shlokas.json"

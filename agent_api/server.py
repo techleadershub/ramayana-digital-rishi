@@ -229,7 +229,8 @@ async def trigger_ingestion(
     background_tasks: BackgroundTasks, 
     secret: str = None,
     skip_sargas: bool = False,
-    skip_sql: bool = False
+    skip_sql: bool = False,
+    skip_verses: bool = False
 ):
     """
     Trigger the ingestion pipeline in the background.
@@ -237,6 +238,7 @@ async def trigger_ingestion(
     Options:
     - skip_sargas: Skip the long Sarga ingestion process.
     - skip_sql: Skip the SQL database population.
+    - skip_verses: Skip the verse (shloka) ingestion process.
     """
     # Security Check
     if os.environ.get("ALLOW_INGESTION_API", "false").lower() != "true":
@@ -263,10 +265,13 @@ async def trigger_ingestion(
             else:
                 print("Skipping Sarga Ingestion.")
 
-            # 3. Verse Ingestion (Always run unless we add a flag, but user wants this specifically)
-            print("Step 3: Ingesting Verses (Shlokas)...")
-            ingestor = RamayanaIngestor()
-            ingestor.run()
+            # 3. Verse Ingestion
+            if not skip_verses:
+                print("Step 3: Ingesting Verses (Shlokas)...")
+                ingestor = RamayanaIngestor()
+                ingestor.run()
+            else:
+                print("Skipping Verse Ingestion.")
             
             print("Ingestion Pipeline Completed.")
         except Exception as e:
@@ -277,7 +282,8 @@ async def trigger_ingestion(
         "message": "Ingestion started in background.", 
         "skipped": {
             "sargas": skip_sargas,
-            "sql": skip_sql
+            "sql": skip_sql,
+            "verses": skip_verses
         }
     }
 

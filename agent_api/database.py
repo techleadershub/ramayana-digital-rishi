@@ -1,7 +1,9 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = "sqlite:///./ramayana_agent.db"
+import os
+
+DATABASE_URL = "sqlite:////app/data/ramayana_agent.db" if os.path.exists("/app/data") else "sqlite:///./ramayana_agent.db"
 
 Base = declarative_base()
 
