@@ -135,8 +135,17 @@ class RamayanaSearcher:
         # Load embedding model
         model_name = self.config['embedding']['model_name']
         print(f"Loading model: {model_name}...")
-        self.model = SentenceTransformer(model_name)
-        print("Model loaded!")
+        # Explicitly load on CPU to avoid meta tensor issues
+        # This prevents PyTorch meta tensor errors in production environments
+        try:
+            self.model = SentenceTransformer(model_name, device='cpu')
+            self.model.eval()  # Set to evaluation mode
+            print("Model loaded on CPU!")
+        except Exception as e:
+            print(f"Warning: Error loading with device='cpu': {e}")
+            # Fallback to default loading
+            self.model = SentenceTransformer(model_name)
+            print("Model loaded with default settings!")
 
         # Initialize LLM
         if OPENAI_AVAILABLE:
@@ -151,13 +160,38 @@ class RamayanaSearcher:
 
     def search_sargas(self, query: str, limit: int = 3) -> List[Dict]:
         """Search for whole chapters/sargas by theme"""
-        query_vector = self.model.encode(query).tolist()
+        # Check if collection exists
+        try:
+            collections = self.client.get_collections().collections
+            collection_names = [c.name for c in collections]
+            if self.sarga_collection_name not in collection_names:
+                print(f"WARNING: Collection '{self.sarga_collection_name}' does not exist!")
+                print(f"Available collections: {collection_names}")
+                print("You need to run ingestion first. See deployment_guide.md")
+                return []  # Return empty results instead of crashing
+        except Exception as e:
+            print(f"Error checking collections: {e}")
+            # Continue anyway, let Qdrant handle the error
         
-        results = self.client.query_points(
-            collection_name=self.sarga_collection_name,
-            query=query_vector,
-            limit=limit
-        ).points
+        # Encode query - this is where the meta tensor error occurs
+        try:
+            query_vector = self.model.encode(query).tolist()
+        except Exception as e:
+            print(f"ERROR encoding query: {e}")
+            raise
+        
+        # Query Qdrant
+        try:
+            results = self.client.query_points(
+                collection_name=self.sarga_collection_name,
+                query=query_vector,
+                limit=limit
+            ).points
+        except Exception as e:
+            print(f"ERROR querying Qdrant: {e}")
+            print(f"Collection '{self.sarga_collection_name}' may not exist or be empty.")
+            print("You need to run ingestion. See deployment_guide.md")
+            return []  # Return empty instead of crashing
         
         return [{
             'score': r.score,

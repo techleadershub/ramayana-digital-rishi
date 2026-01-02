@@ -34,7 +34,81 @@ class ChatRequest(BaseModel):
 
 @app.get("/health")
 def health():
+    """Basic health check"""
     return {"status": "ok", "agent": "Digital Rishi"}
+
+@app.get("/health/detailed")
+def health_detailed():
+    """Detailed health check including Qdrant and collections"""
+    from query_ramayana import RamayanaSearcher
+    health_status = {
+        "status": "ok",
+        "agent": "Digital Rishi",
+        "qdrant": {"connected": False, "collections": {}},
+        "model": {"loaded": False},
+        "ingestion": {"status": "unknown", "collections": {}}
+    }
+    
+    try:
+        searcher = RamayanaSearcher()
+        health_status["model"]["loaded"] = searcher.model is not None
+        
+        # Check Qdrant collections
+        collections = searcher.client.get_collections().collections
+        health_status["qdrant"]["connected"] = True
+        collection_names = [c.name for c in collections]
+        
+        # Check required collections with point counts
+        required_collections = {
+            "verses": searcher.collection_name,
+            "sargas": searcher.sarga_collection_name
+        }
+        
+        ingestion_status = "complete"
+        for key, collection_name in required_collections.items():
+            if collection_name in collection_names:
+                try:
+                    info = searcher.client.get_collection(collection_name)
+                    point_count = info.points_count
+                    health_status["qdrant"]["collections"][collection_name] = {
+                        "exists": True,
+                        "points": point_count
+                    }
+                    health_status["ingestion"]["collections"][key] = {
+                        "name": collection_name,
+                        "points": point_count,
+                        "status": "ok" if point_count > 0 else "empty"
+                    }
+                    if point_count == 0:
+                        ingestion_status = "incomplete"
+                except Exception as e:
+                    health_status["qdrant"]["collections"][collection_name] = {
+                        "exists": True,
+                        "error": str(e)
+                    }
+                    ingestion_status = "error"
+            else:
+                health_status["qdrant"]["collections"][collection_name] = {
+                    "exists": False
+                }
+                health_status["ingestion"]["collections"][key] = {
+                    "name": collection_name,
+                    "status": "missing"
+                }
+                ingestion_status = "incomplete"
+        
+        health_status["ingestion"]["status"] = ingestion_status
+        
+        if ingestion_status != "complete":
+            health_status["status"] = "warning"
+            health_status["message"] = f"Ingestion status: {ingestion_status}. Some collections may be missing or empty."
+            health_status["ingestion"]["instructions"] = "Run: python ingest_ramayana.py && python ingest_sargas.py && python agent_api/ingest.py"
+        
+    except Exception as e:
+        health_status["status"] = "error"
+        health_status["error"] = str(e)
+    
+    return health_status
 
 from tools import get_verse_details
 

@@ -27,7 +27,17 @@ def ingest_full_sargas():
     collection_name = config['qdrant']['sarga_collection_name']
     
     # Load Model
-    model = SentenceTransformer(config['embedding']['model_name'])
+    # Explicitly load on CPU to avoid meta tensor issues
+    # This prevents PyTorch meta tensor errors in production environments
+    try:
+        model = SentenceTransformer(config['embedding']['model_name'], device='cpu')
+        model.eval()  # Set to evaluation mode
+        print("Model loaded on CPU!")
+    except Exception as e:
+        print(f"Warning: Error loading with device='cpu': {e}")
+        # Fallback to default loading
+        model = SentenceTransformer(config['embedding']['model_name'])
+        print("Model loaded with default settings!")
     
     # Create Collection
     # Use higher size if needed, but MiniLM is 384
