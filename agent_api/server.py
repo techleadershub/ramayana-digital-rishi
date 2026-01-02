@@ -225,34 +225,56 @@ def get_verse(kanda: str, sarga: int, shloka: int):
 from fastapi import BackgroundTasks
 
 @app.post("/admin/ingest")
-async def trigger_ingestion(background_tasks: BackgroundTasks, secret: str = None):
+async def trigger_ingestion(
+    background_tasks: BackgroundTasks, 
+    secret: str = None,
+    skip_sargas: bool = False,
+    skip_sql: bool = False
+):
     """
-    Trigger the full ingestion pipeline in the background.
-    In production, you should pass a secret key.
+    Trigger the ingestion pipeline in the background.
+    Options:
+    - skip_sargas: Skip the long Sarga ingestion process.
+    - skip_sql: Skip the SQL database population.
     """
     from ingest_ramayana import RamayanaIngestor
     from ingest_sargas import ingest_full_sargas
     from ingest import ingest_data as ingest_sql
-    # Simple security check if needed
-    # if secret != os.environ.get("ADMIN_SECRET"):
-    #    raise HTTPException(status_code=403)
 
-    def run_full_pipeline():
-        print("Starting Full Production Ingestion...")
+    def run_pipeline():
+        print("Starting Production Ingestion Pipeline...")
         try:
             # 1. SQL Ingestion
-            ingest_sql()
+            if not skip_sql:
+                print("Step 1: Ingesting SQL Data...")
+                ingest_sql()
+            else:
+                print("Skipping SQL Ingestion.")
+
             # 2. Sarga Ingestion
-            ingest_full_sargas()
-            # 3. Verse Ingestion
+            if not skip_sargas:
+                print("Step 2: Ingesting Sargas (this may take a while)...")
+                ingest_full_sargas()
+            else:
+                print("Skipping Sarga Ingestion.")
+
+            # 3. Verse Ingestion (Always run unless we add a flag, but user wants this specifically)
+            print("Step 3: Ingesting Verses (Shlokas)...")
             ingestor = RamayanaIngestor()
             ingestor.run()
-            print("Full Production Ingestion Completed.")
+            
+            print("Ingestion Pipeline Completed.")
         except Exception as e:
             print(f"Ingestion Failed: {e}")
 
-    background_tasks.add_task(run_full_pipeline)
-    return {"message": "Ingestion started in background. This may take 15-20 minutes."}
+    background_tasks.add_task(run_pipeline)
+    return {
+        "message": "Ingestion started in background.", 
+        "skipped": {
+            "sargas": skip_sargas,
+            "sql": skip_sql
+        }
+    }
 
 @app.post("/chat_stream")
 async def chat_stream(req: ChatRequest):
