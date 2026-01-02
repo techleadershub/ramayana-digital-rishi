@@ -5,6 +5,7 @@ Ingests Valmiki Ramayana verses for semantic search and thematic research
 
 import json
 import yaml
+import os
 import logging
 from typing import List, Dict, Any
 from pathlib import Path
