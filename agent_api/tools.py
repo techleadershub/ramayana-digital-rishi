@@ -113,6 +113,12 @@ def search_narrative(query: str, speaker: str = None) -> str:
                 f"Text: {r.explanation}\n"
             )
         return "\n---\n".join(formatted)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"ERROR in search_narrative: {error_msg}")
+        if "no such table" in error_msg.lower():
+            return "Note: The narrative database is currently rebuilding. Please try searching for general Principles instead."
+        return f"Error retrieving narrative: {error_msg}"
     finally:
         session.close()
 
@@ -142,6 +148,9 @@ def get_verse_context(kanda: str, sarga: int, verse_number: int, window: int = 5
                 f"{marker}[{r.verse_number}] {r.speaker or 'Narrator'}: {r.explanation}"
             )
         return "\n".join(formatted)
+    except Exception as e:
+        print(f"ERROR in get_verse_context: {e}")
+        return "Context unobtainable (Database undergoing maintenance)."
     finally:
         session.close()
 
