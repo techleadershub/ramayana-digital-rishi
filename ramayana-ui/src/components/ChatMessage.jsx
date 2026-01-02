@@ -80,7 +80,7 @@ export default function ChatMessage({ message, onVerseClick }) {
         }
     );
 
-    // Third Pass: Replace Sarga-only ones
+    // Third Pass: Replace Sarga-only ones (e.g. "Bala Kanda 18")
     processedContent = processedContent.replace(
         SARGA_ONLY_REGEX,
         (match, kName, sNum, offset, fullText) => {
@@ -88,8 +88,14 @@ export default function ChatMessage({ message, onVerseClick }) {
             const nextChar = fullText[offset + match.length];
             if (prevChar === '[' || prevChar === '(' || nextChar === ']' || nextChar === ')') return match;
 
+            // Critical Check: Does this look like `18:1` or `18: 5`? If so, SKIP it here.
+            // The NAKED_CITATION_REGEX should have caught it, but if not, we must ensure we don't break it.
+            // If the next character is a colon, this regex shouldn't have fired due to negative lookahead, but let's be safe.
+            if (nextChar === ':') return match;
+
             const cleanKanda = `${kName} Kanda`;
-            return `[[CIT:${cleanKanda}|${sNum}|1]]`; // Default to 1 for search purposes
+            // We use '0' as a marker for "Whole Chapter" so the UI knows not to show ":1"
+            return `[[CIT:${cleanKanda}|${sNum}|0]]`;
         }
     );
 
@@ -140,6 +146,10 @@ export default function ChatMessage({ message, onVerseClick }) {
                                     const sarga = parts[1];
                                     const shloka = parts[2];
 
+                                    // Visual Logic: If shloka is '0', it means "Whole Chapter", so don't show the verse number
+                                    const isChapterRef = shloka === '0';
+                                    const label = isChapterRef ? `${kanda} ${sarga}` : `${kanda} ${sarga}:${shloka}`;
+
                                     return (
                                         <button
                                             onClick={(e) => {
@@ -155,7 +165,7 @@ export default function ChatMessage({ message, onVerseClick }) {
                                             type="button"
                                         >
                                             <Sparkles size={10} className="text-orange-500" />
-                                            {children}
+                                            {label}
                                         </button>
                                     );
                                 }

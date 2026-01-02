@@ -233,10 +233,15 @@ async def trigger_ingestion(
 ):
     """
     Trigger the ingestion pipeline in the background.
+    Protected by ALLOW_INGESTION_API environment variable.
     Options:
     - skip_sargas: Skip the long Sarga ingestion process.
     - skip_sql: Skip the SQL database population.
     """
+    # Security Check
+    if os.environ.get("ALLOW_INGESTION_API", "false").lower() != "true":
+        raise HTTPException(status_code=403, detail="Ingestion API is disabled in this environment.")
+
     from ingest_ramayana import RamayanaIngestor
     from ingest_sargas import ingest_full_sargas
     from ingest import ingest_data as ingest_sql
