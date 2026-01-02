@@ -1,23 +1,22 @@
 # Build stage
 FROM node:20-slim AS build
 WORKDIR /app
-
-# Ensure we have the environment variable during build if possible
-# Note: Railway requires this to be set in the 'Variables' tab to be available here
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
-
 COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run build
+# Double check the build exists
+RUN ls -la /app/dist
 
 # Production stage
 FROM node:20-slim
 WORKDIR /app
-# Install serve globally in the final stage
 RUN npm install -g serve
-COPY --from=build /app/dist ./dist
+# Copy ALL contents from the build's dist folder directly into /app
+COPY --from=build /app/dist .
+# Verify the files are in the final image
+RUN ls -la /app
+
 EXPOSE $PORT
-# Use a simple shell command to start serve on the Railway port
-CMD serve -s dist -l $PORT
+# Serve the current directory (.) as a single-page app
+CMD ["sh", "-c", "serve -s . -l $PORT"]
