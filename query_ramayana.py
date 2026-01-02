@@ -121,13 +121,13 @@ class RamayanaSearcher:
         if mode == 'local':
             storage_path = qdrant_config.get('path', './qdrant_storage')
             print(f"Using Qdrant in LOCAL mode with storage at: {storage_path}")
-            self.client = QdrantClient(path=storage_path)
+            self.client = QdrantClient(path=storage_path, timeout=10)
         elif qdrant_url:
             print(f"Using Qdrant via URL...")
-            self.client = QdrantClient(url=qdrant_url)
+            self.client = QdrantClient(url=qdrant_url, timeout=10)
         else:
             print(f"Using Qdrant in SERVER mode at {host}:{port}")
-            self.client = QdrantClient(host=host, port=port)
+            self.client = QdrantClient(host=host, port=port, timeout=10)
         
         self.collection_name = qdrant_config['collection_name']
         self.sarga_collection_name = qdrant_config.get('sarga_collection_name', 'ramayana_sargas')

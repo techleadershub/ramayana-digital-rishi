@@ -39,74 +39,148 @@ def health():
 
 @app.get("/health/detailed")
 def health_detailed():
-    """Detailed health check including Qdrant and collections"""
-    from query_ramayana import RamayanaSearcher
+    """Detailed health check including Qdrant and collections - with timeout protection"""
+    import threading
+    import queue
+    
     health_status = {
         "status": "ok",
         "agent": "Digital Rishi",
-        "qdrant": {"connected": False, "collections": {}},
+        "qdrant": {"connected": False, "collections": {}, "error": None},
         "model": {"loaded": False},
         "ingestion": {"status": "unknown", "collections": {}}
     }
     
+    # Check model - just verify import works (don't actually load)
     try:
-        searcher = RamayanaSearcher()
-        health_status["model"]["loaded"] = searcher.model is not None
-        
-        # Check Qdrant collections
-        collections = searcher.client.get_collections().collections
-        health_status["qdrant"]["connected"] = True
-        collection_names = [c.name for c in collections]
-        
-        # Check required collections with point counts
-        required_collections = {
-            "verses": searcher.collection_name,
-            "sargas": searcher.sarga_collection_name
-        }
-        
-        ingestion_status = "complete"
-        for key, collection_name in required_collections.items():
-            if collection_name in collection_names:
-                try:
-                    info = searcher.client.get_collection(collection_name)
-                    point_count = info.points_count
-                    health_status["qdrant"]["collections"][collection_name] = {
-                        "exists": True,
-                        "points": point_count
-                    }
-                    health_status["ingestion"]["collections"][key] = {
-                        "name": collection_name,
-                        "points": point_count,
-                        "status": "ok" if point_count > 0 else "empty"
-                    }
-                    if point_count == 0:
-                        ingestion_status = "incomplete"
-                except Exception as e:
-                    health_status["qdrant"]["collections"][collection_name] = {
-                        "exists": True,
-                        "error": str(e)
-                    }
-                    ingestion_status = "error"
-            else:
-                health_status["qdrant"]["collections"][collection_name] = {
-                    "exists": False
-                }
-                health_status["ingestion"]["collections"][key] = {
-                    "name": collection_name,
-                    "status": "missing"
-                }
-                ingestion_status = "incomplete"
-        
-        health_status["ingestion"]["status"] = ingestion_status
-        
-        if ingestion_status != "complete":
-            health_status["status"] = "warning"
-            health_status["message"] = f"Ingestion status: {ingestion_status}. Some collections may be missing or empty."
-            health_status["ingestion"]["instructions"] = "Run: python ingest_ramayana.py && python ingest_sargas.py && python agent_api/ingest.py"
-        
+        from sentence_transformers import SentenceTransformer
+        health_status["model"]["loaded"] = True
     except Exception as e:
+        health_status["model"]["loaded"] = False
+        health_status["model"]["error"] = str(e)
+    
+    # Check Qdrant connection with timeout using threading
+    def check_qdrant(result_queue):
+        """Check Qdrant connection in a separate thread"""
+        try:
+            from qdrant_client import QdrantClient
+            import yaml
+            import os
+            
+            # Load config
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(base_dir, '..', 'config.yaml')
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            qdrant_config = config['qdrant']
+            mode = os.environ.get("QDRANT_MODE", qdrant_config.get('mode', 'server'))
+            host = os.environ.get("QDRANT_HOST", qdrant_config.get('host', 'localhost'))
+            port = int(os.environ.get("QDRANT_PORT", qdrant_config.get('port', 6333)))
+            qdrant_url = os.environ.get("QDRANT_URL")
+            
+            # Create client with short timeout
+            if mode == 'local':
+                client = QdrantClient(path=qdrant_config.get('path', './qdrant_storage'), timeout=3)
+            elif qdrant_url:
+                client = QdrantClient(url=qdrant_url, timeout=3)
+            else:
+                client = QdrantClient(host=host, port=port, timeout=3)
+            
+            # Get collections
+            collections = client.get_collections().collections
+            collection_names = [c.name for c in collections]
+            
+            # Check required collections
+            verse_collection = qdrant_config['collection_name']
+            sarga_collection = qdrant_config.get('sarga_collection_name', 'ramayana_sargas')
+            required_collections = {
+                "verses": verse_collection,
+                "sargas": sarga_collection
+            }
+            
+            result = {
+                "connected": True,
+                "collections": {},
+                "ingestion": {"collections": {}, "status": "complete"}
+            }
+            
+            ingestion_status = "complete"
+            for key, collection_name in required_collections.items():
+                if collection_name in collection_names:
+                    try:
+                        info = client.get_collection(collection_name)
+                        point_count = info.points_count
+                        result["collections"][collection_name] = {
+                            "exists": True,
+                            "points": point_count
+                        }
+                        result["ingestion"]["collections"][key] = {
+                            "name": collection_name,
+                            "points": point_count,
+                            "status": "ok" if point_count > 0 else "empty"
+                        }
+                        if point_count == 0:
+                            ingestion_status = "incomplete"
+                    except Exception as e:
+                        result["collections"][collection_name] = {
+                            "exists": True,
+                            "error": str(e)
+                        }
+                        ingestion_status = "error"
+                else:
+                    result["collections"][collection_name] = {
+                        "exists": False
+                    }
+                    result["ingestion"]["collections"][key] = {
+                        "name": collection_name,
+                        "status": "missing"
+                    }
+                    ingestion_status = "incomplete"
+            
+            result["ingestion"]["status"] = ingestion_status
+            result_queue.put(result)
+            
+        except Exception as e:
+            result_queue.put({
+                "connected": False,
+                "error": str(e),
+                "collections": {},
+                "ingestion": {"status": "unknown", "collections": {}}
+            })
+    
+    # Run Qdrant check with timeout
+    result_queue = queue.Queue()
+    thread = threading.Thread(target=check_qdrant, args=(result_queue,))
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout=5)  # 5 second timeout
+    
+    if thread.is_alive():
+        # Thread is still running - timeout occurred
         health_status["status"] = "error"
-        health_status["error"] = str(e)
+        health_status["qdrant"]["connected"] = False
+        health_status["qdrant"]["error"] = "Connection timeout - Qdrant may be unreachable or slow"
+    else:
+        # Thread completed
+        try:
+            qdrant_result = result_queue.get_nowait()
+            health_status["qdrant"] = {
+                "connected": qdrant_result.get("connected", False),
+                "collections": qdrant_result.get("collections", {}),
+                "error": qdrant_result.get("error")
+            }
+            health_status["ingestion"] = qdrant_result.get("ingestion", {"status": "unknown", "collections": {}})
+            
+            ingestion_status = health_status["ingestion"].get("status", "unknown")
+            if ingestion_status != "complete":
+                health_status["status"] = "warning"
+                health_status["message"] = f"Ingestion status: {ingestion_status}. Some collections may be missing or empty."
+                health_status["ingestion"]["instructions"] = "Run: python ingest_ramayana.py && python ingest_sargas.py && python agent_api/ingest.py"
+        except queue.Empty:
+            health_status["status"] = "error"
+            health_status["qdrant"]["connected"] = False
+            health_status["qdrant"]["error"] = "Failed to get Qdrant status"
     
     return health_status
 
