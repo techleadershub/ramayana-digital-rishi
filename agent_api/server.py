@@ -318,8 +318,18 @@ async def chat_stream(req: ChatRequest):
                 
                 # If plan has been created/changed
                 if current_plan and current_plan != last_plan:
-                    print(f"Yielding Plan: {current_plan}")
-                    yield json.dumps({"type": "plan", "steps": current_plan, "completed": last_idx}) + "\n"
+                    # Serialize plan for frontend (Front expects List[str], Back has List[Dict])
+                    serialized_plan = []
+                    for step in current_plan:
+                        if isinstance(step, dict) and "description" in step:
+                            serialized_plan.append(step["description"])
+                        elif isinstance(step, str):
+                            serialized_plan.append(step)
+                        else:
+                            serialized_plan.append(str(step))
+                            
+                    print(f"Yielding Plan: {serialized_plan}")
+                    yield json.dumps({"type": "plan", "steps": serialized_plan, "completed": last_idx}) + "\n"
                     last_plan = current_plan
                 
                 # If progress made
