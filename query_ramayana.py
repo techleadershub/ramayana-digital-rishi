@@ -282,6 +282,21 @@ class RamayanaSearcher:
                     final_results.append(res)
         
         print(f"3. filtered out {len(raw_results) - len(final_results)} low-relevance verses. Kept {len(final_results)}.")
+        
+        # FINAL FALLBACK: If RAG filtered everything out, return the top 5 raw matches anyway.
+        # This prevents the "I found nothing" response which frustrates users.
+        if not final_results and raw_results:
+             print("   ⚠️ Strict filter removed all results. Falling back to top 5 raw matches.", flush=True)
+             fallback = raw_results[:5]
+             for res in fallback:
+                 res['rag_analysis'] = {
+                     "keep": True, 
+                     "category": "Potential Match (Low Confidence)", 
+                     "reason": "Strict RAG filter rejected this, but it was the best semantic match.",
+                     "modern_take": "No specific modern take generated."
+                 }
+             return fallback
+
         return final_results[:final_limit]
     
     def print_results(self, results: List[Dict], rag_mode: bool = False):
