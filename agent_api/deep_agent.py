@@ -193,6 +193,14 @@ def planner_node(state: DeepAgentState):
     # Let's revert to sending Strings in the 'plan' field for the Agent State if possible?
     # No, Executor needs the args.
     
+    # Invoke the planner LLM
+    plan_obj = planner_llm.invoke(messages)
+
+    # Convert plan to text for the message history
+    plan_text = "I have created a research plan:\n"
+    for i, step in enumerate(plan_obj.steps):
+        plan_text += f"{i+1}. {step.description}\n"
+
     # Converting 'plan' back to list of dicts:
     steps_as_dicts = [step.model_dump() for step in plan_obj.steps]
     
