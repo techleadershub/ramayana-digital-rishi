@@ -124,17 +124,13 @@ class RamayanaIngestor:
         """Initialize sentence transformer model"""
         model_name = self.config['embedding']['model_name']
         self.logger.info(f"Loading embedding model: {model_name}...")
-        # Explicitly load on CPU to avoid meta tensor issues
-        # This prevents PyTorch meta tensor errors in production environments
         try:
-            self.model = SentenceTransformer(model_name, device='cpu')
-            self.model.eval()  # Set to evaluation mode
-            self.logger.info("Model loaded successfully on CPU!")
-        except Exception as e:
-            self.logger.warning(f"Error loading with device='cpu': {e}")
-            # Fallback to default loading
             self.model = SentenceTransformer(model_name)
-            self.logger.info("Model loaded with default settings!")
+            self.model.eval()  # Set to evaluation mode
+            self.logger.info("Model loaded successfully!")
+        except Exception as e:
+            self.logger.error(f"Error loading model: {e}")
+            raise
     
     def load_verses(self) -> List[Dict]:
         """Load verses from JSON file"""

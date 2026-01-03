@@ -138,17 +138,13 @@ class RamayanaSearcher:
         # Load embedding model
         model_name = self.config['embedding']['model_name']
         print(f"Loading model: {model_name}...")
-        # Explicitly load on CPU to avoid meta tensor issues
-        # This prevents PyTorch meta tensor errors in production environments
         try:
-            self.model = SentenceTransformer(model_name, device='cpu')
-            self.model.eval()  # Set to evaluation mode
-            print("Model loaded on CPU!")
-        except Exception as e:
-            print(f"Warning: Error loading with device='cpu': {e}")
-            # Fallback to default loading
             self.model = SentenceTransformer(model_name)
-            print("Model loaded with default settings!")
+            self.model.eval()
+            print(f"Model {model_name} loaded successfully!")
+        except Exception as e:
+            print(f"CRITICAL ERROR loading model: {e}")
+            self.model = None
 
         # Initialize LLM
         if OPENAI_AVAILABLE:
