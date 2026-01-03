@@ -31,7 +31,7 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 class ResearchStep(BaseModel):
     description: str = Field(description="Human readable description of this step (e.g. 'Search for Aranya Kanda context')")
     tool_name: str = Field(description="The exact name of the tool to use. Options: 'search_chapters', 'search_principles', 'search_narrative', 'get_verse_context'")
-    tool_args: dict = Field(description="JSON dictionary of arguments for the tool (e.g. {'query': '...'})")
+    tool_args: dict = Field(default_factory=dict, description="JSON dictionary of arguments for the tool (e.g. {'query': '...'})")
 
 class Plan(BaseModel):
     steps: List[ResearchStep] = Field(description="A list of 3-5 structured research steps.")
