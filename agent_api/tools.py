@@ -86,41 +86,33 @@ def search_narrative(query: str, speaker: str = None) -> str:
         query: Keywords to search in the English translation/explanation (e.g. 'golden deer', 'sleeping giant').
         speaker: Optional. Filter by speaker (e.g. 'Rama', 'Sita').
     """
-    session = SessionLocal()
-    print(f"DEBUG: 📜 Agent Researching Narrative for: '{query}' (Speaker: {speaker})")
+    searcher = get_searcher()
+    print(f"DEBUG: 📜 NARRATIVE SEARCH (RAG): '{query}' (Speaker: {speaker})", flush=True)
+    
     try:
-        # Simple LIKE query for now (FTS later)
-        # Search in explanation OR translation
-        q = session.query(Verse).filter(
-            (Verse.explanation.ilike(f"%{query}%")) | 
-            (Verse.translation.ilike(f"%{query}%"))
-        )
-        
-        if speaker:
-            q = q.filter(Verse.speaker.ilike(f"%{speaker}%"))
-            
-        results = q.limit(10).all()
+        # Use Vector Search for semantics (e.g. 'crying' matches 'tears')
+        results = searcher.search(query, limit=10, speaker_filter=speaker)
         
         if not results:
-            return "No narrative verses found."
+            return "No specific narrative verses found matching this description."
             
         formatted = []
         for r in results:
+            speaker_info = r.get('speaker', 'Unknown')
             formatted.append(
-                f"SOURCE: SPECIFIC VERSE\n"
-                f"Location: {r.kanda} {r.sarga}:{r.verse_number}\n"
-                f"Speaker: {r.speaker}\n"
-                f"Text: {r.explanation}\n"
+                f"SOURCE: NARRATIVE VERSE\n"
+                f"Verse: {r['verse_id']}\n"
+                f"Location: {r['kanda']} {r['sarga']}:{r['shloka']}\n"
+                f"Speaker: {speaker_info}\n"
+                f"Text: {r['translation']}\n"
+                f"Context: {r['explanation']}\n"
             )
         return "\n---\n".join(formatted)
     except Exception as e:
-        error_msg = str(e)
-        print(f"ERROR in search_narrative: {error_msg}")
-        if "no such table" in error_msg.lower():
-            return "Note: The narrative database is currently rebuilding. Please try searching for general Principles instead."
-        return f"Error retrieving narrative: {error_msg}"
-    finally:
-        session.close()
+        print(f"ERROR in search_narrative: {e}")
+        return f"Error searching narrative: {e}"
+
+
 
 @tool
 def get_verse_context(kanda: str, sarga: int, verse_number: int, window: int = 5) -> str:

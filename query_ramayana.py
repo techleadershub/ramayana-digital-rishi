@@ -200,13 +200,24 @@ class RamayanaSearcher:
             'verse_count': r.payload['verse_count']
         } for r in results]
 
-    def search(self, query: str, limit: int = 5, kanda_filter: str = None) -> List[Dict]:
+    def search(self, query: str, limit: int = 5, kanda_filter: str = None, speaker_filter: str = None) -> List[Dict]:
         """Standard Semantic Search"""
         query_vector = self.model.encode(query).tolist()
         
         search_filter = None
+        must_conditions = []
+        
         if kanda_filter:
-            search_filter = {"must": [{"key": "kanda", "match": {"value": kanda_filter}}]}
+            must_conditions.append({"key": "kanda", "match": {"value": kanda_filter}})
+        
+        # Add speaker filter if provided
+        if speaker_filter:
+            # Note: This relies on 'speaker' being stored in the payload. 
+            # If not indexed as a keyword, performance might vary, but Qdrant handles payload path filtering well.
+            must_conditions.append({"key": "speaker", "match": {"value": speaker_filter}})
+            
+        if must_conditions:
+            search_filter = {"must": must_conditions}
         
         results = self.client.query_points(
             collection_name=self.collection_name,
@@ -223,6 +234,7 @@ class RamayanaSearcher:
                 'kanda': result.payload['kanda'],
                 'sarga': result.payload['sarga'],
                 'shloka': result.payload['shloka'],
+                'speaker': result.payload.get('speaker', 'Unknown'),
                 'shloka_text': result.payload['shloka_text'],
                 'translation': result.payload['translation'],
                 'explanation': result.payload['explanation']
