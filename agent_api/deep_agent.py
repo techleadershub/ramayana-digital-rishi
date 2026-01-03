@@ -34,7 +34,7 @@ class ResearchStep(BaseModel):
     tool_args: dict = Field(default_factory=dict, description="JSON dictionary of arguments for the tool (e.g. {'query': '...'})")
 
 class Plan(BaseModel):
-    steps: List[ResearchStep] = Field(description="A list of 3-5 structured research steps.")
+    steps: List[ResearchStep] = Field(description="A list of 3-6 structured research steps. Use more steps for complex queries.")
 
 # output="function_calling" is required when using generic 'dict' types in the Pydantic model
 planner_llm = llm.with_structured_output(Plan, method="function_calling")
@@ -58,14 +58,24 @@ Your goal is to break down a user query into a series of **DIRECT TOOL EXECUTION
 ### **STRATEGY GUIDELINES**
 1.  **Start Broad**: Almost always start with `search_chapters` to ground the topic in specific Kandas.
 2.  **Drill Down**: Follow up with `search_principles` or `search_narrative` for specific citations.
-3.  **Be Precise**: In `tool_args`, ensure keys match the tool definitions above (e.g., use "query", not "q").
+3.  **Cross-Reference**: For complex topics, search for multiple angles (e.g. "Rama's view" AND "Sita's view").
+4.  **Be Precise**: In `tool_args`, ensure keys match the tool definitions above (e.g., use "query", not "q").
 
-### **EXAMPLE PLAN**
-Query: "How did Rama handle grief?"
+### **EXAMPLES**
+
+**Query 1 (Simple)**: "How did Rama handle grief?"
 Steps:
 1. { "tool_name": "search_chapters", "tool_args": { "query": "Rama grief lamentation forest" }, "description": "Identify which Sargas contain Rama's grief." }
 2. { "tool_name": "search_principles", "tool_args": { "query": "Rama grieving for Sita" }, "description": "Find specific verses showing his emotional state." }
 3. { "tool_name": "search_narrative", "tool_args": { "query": "Rama cries", "speaker": "Rama" }, "description": "Find narrative descriptions of his actions." }
+
+**Query 2 (Complex)**: "Compare the leadership styles of Rama and Ravana."
+Steps:
+1. { "tool_name": "search_chapters", "tool_args": { "query": "Rama kingly duties Ayodhya" }, "description": "Identify chapters showing Rama's ruling style." }
+2. { "tool_name": "search_chapters", "tool_args": { "query": "Ravana council war room" }, "description": "Identify chapters showing Ravana's interaction with ministers." }
+3. { "tool_name": "search_principles", "tool_args": { "query": "Rama dharma leadership" }, "description": "Search for Rama's principles of governance." }
+4. { "tool_name": "search_principles", "tool_args": { "query": "Ravana arrogance king" }, "description": "Search for Ravana's principles of power." }
+5. { "tool_name": "search_narrative", "tool_args": { "query": "Vibheeshana advice to Ravana" }, "description": "Find narrative where Ravana rejects advice (Contrast)." }
 """
 
 # Synthesizer Prompt (Unchanged)
@@ -151,17 +161,44 @@ def planner_node(state: DeepAgentState):
         HumanMessage(content=query)
     ]
     
-    plan_obj = planner_llm.invoke(messages)
+    # Store steps directly as objects for internal use if needed, 
+    # BUT for the frontend stream and state compatibility (which expects strings), 
+    # we must map back to strings or update the frontend. 
+    # Safest quick fix: Use the description strings for the "plan" state variable.
+    # We can store the full structured plan in a separate state key if we really needed it for execution,
+    # but logically, the executor just needs to know what to do.
+    # WAIT! The executor_node reads `state["plan"]`. If we change this to strings, the executor breaks!
+    # Correct Apporach:
+    # 1. Keep state["plan"] as Objects (dicts) for the Executor.
+    # 2. BUT the server.py `chat_stream` reads generic events.
+    # ERROR ANALYSIS: The error is happening in the UI reacting to the "plan" event type.
+    # We need to check how server.py yields the plan.
     
-    # Store steps as dictionaries for state compatibility
+    # Let's look at how we return state here. 
+    # If we return dicts here, state["plan"] becomes dicts. 
+    # The executor expects dicts (per our v2 update).
+    # The UI receives JSON chunks.
+    
+    # We must ensure the Executor uses the structured data, 
+    # but we might need to change how we yield it? 
+    # or just make the description the plan for the UI?
+    
+    # Actually, the user's error says: "object with keys {description, tool_name, tool_args}"
+    # This means the UI received the Dicts.
+    
+    # HYBRID FIX:
+    # We will serialize the plan as a List of Dicts for the state (so Executor works).
+    # BUT we need to handle the UI.
+    
+    # Let's revert to sending Strings in the 'plan' field for the Agent State if possible?
+    # No, Executor needs the args.
+    
+    # Converting 'plan' back to list of dicts:
     steps_as_dicts = [step.model_dump() for step in plan_obj.steps]
-    
-    # Log the plan as text for the UI
-    plan_text = "I have developed a research plan:\n" + "\n".join([f"{i+1}. {step.description}" for i, step in enumerate(plan_obj.steps)])
     
     return {
         "query": query,
-        "plan": steps_as_dicts, # Now a list of dicts, not strings
+        "plan": steps_as_dicts, 
         "past_steps": [],
         "current_step_index": 0,
         "research_log": [],
