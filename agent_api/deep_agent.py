@@ -4,7 +4,7 @@ import json
 import os
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field
@@ -193,10 +193,24 @@ def executor_node(state: DeepAgentState):
         config={"recursion_limit": 100}
     )
     
-    # Extract final response from mini-agent
+    # --- RAW DATA INJECTION ---
+    # We capture the RAW output from the tools to ensure 100% fidelity.
+    # This prevents the Researcher LLM from prioritizing summary over specific verse IDs.
+    tool_outputs = []
+    for msg in result["messages"]:
+        if isinstance(msg, ToolMessage):
+             prefix = f"🔌 TOOL OUTPUT ({msg.name}):"
+             tool_outputs.append(f"{prefix}\n{msg.content}")
+
     agent_response = result["messages"][-1].content
     
-    log_entry = f"## Step {idx+1}: {current_task}\nResult: {agent_response}\n"
+    if tool_outputs:
+        raw_data_block = "\n\n".join(tool_outputs)
+        log_entry = f"## Step {idx+1}: {current_task}\n\n### 🛡️ RAW DATABASE RESULTS (TRUTH):\n{raw_data_block}\n\n### 🤖 Researcher Summary:\n{agent_response}\n"
+    else:
+        # Fallback if no tools were called (pure reasoning)
+        log_entry = f"## Step {idx+1}: {current_task}\nResult: {agent_response}\n"
+
     new_past_steps = state.get("past_steps", []) + [current_task]
     new_research_log = state.get("research_log", []) + [log_entry]
     
