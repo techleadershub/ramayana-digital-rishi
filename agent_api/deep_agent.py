@@ -36,7 +36,8 @@ class ResearchStep(BaseModel):
 class Plan(BaseModel):
     steps: List[ResearchStep] = Field(description="A list of 3-5 structured research steps.")
 
-planner_llm = llm.with_structured_output(Plan)
+# output="function_calling" is required when using generic 'dict' types in the Pydantic model
+planner_llm = llm.with_structured_output(Plan, method="function_calling")
 
 PLANNER_SYSTEM_PROMPT = """You are the 'Strategist' for a Ramayana AI Scholar.
 Your goal is to break down a user query into a series of **DIRECT TOOL EXECUTIONS**.
