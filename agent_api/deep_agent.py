@@ -20,7 +20,7 @@ class DeepAgentState(TypedDict):
     """
     messages: Annotated[List[BaseMessage], operator.add] 
     query: str
-    plan: List[str]
+    plan: List[dict] # Structured steps (ResearchStep.model_dump())
     past_steps: List[str]
     current_step_index: int
     research_log: List[str]
@@ -28,41 +28,46 @@ class DeepAgentState(TypedDict):
 # --- 2. Models & Prompts ---
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-# Planner Model
+class ResearchStep(BaseModel):
+    description: str = Field(description="Human readable description of this step (e.g. 'Search for Aranya Kanda context')")
+    tool_name: str = Field(description="The exact name of the tool to use. Options: 'search_chapters', 'search_principles', 'search_narrative', 'get_verse_context'")
+    tool_args: dict = Field(description="JSON dictionary of arguments for the tool (e.g. {'query': '...'})")
+
 class Plan(BaseModel):
-    steps: List[str] = Field(description="A list of 3-5 clear, distinct research steps to answer the user request.")
+    steps: List[ResearchStep] = Field(description="A list of 3-5 structured research steps.")
 
 planner_llm = llm.with_structured_output(Plan)
 
 PLANNER_SYSTEM_PROMPT = """You are the 'Strategist' for a Ramayana AI Scholar.
-Your goal is to break down a complex user query into a logical research plan.
+Your goal is to break down a user query into a series of **DIRECT TOOL EXECUTIONS**.
 
-### **HIERARCHICAL RESEARCH (CRITICAL)**:
-1.  **Macro-to-Micro**: If the user asks a broad thematic question (e.g., 'Prosperity', 'Grief', 'City life'), your first step MUST be to use `search_chapters` to get the big picture.
-2.  **Narrowing Down**: Use the chapter summaries to decide which specific Kandas/Sargas to search for verses in.
-3.  **Fact-Driven**: Do NOT assume modern interpretations. Search for the root cause in the Valmiki Ramayana text.
-4.  **Cross-Reference**: Always include a step to find specific verses using `search_principles` or `search_narrative` *after* you have the chapter context.
+### **AVAILABLE TOOLS (Use these exactly)**
+1.  `search_chapters(query: str)`: 
+    - Best for **MACRO** context. Use this FIRST for broad topics (e.g., "Prosperity", "Dharma", "Kingdom").
+    - Returns summary of relevant Sargas.
+2.  `search_principles(query: str)`: 
+    - Best for **MICRO** analysis of topics, ethics, and wisdom.
+    - Use for queries like: "leadership", "sisterhood", "vows", "anger".
+3.  `search_narrative(query: str, speaker: str = None)`: 
+    - Best for **STORY** events and dialogue.
+    - Use for: "What happened when...", "What did Rama say to...", "Story of Golden Deer".
+4.  `get_verse_context(kanda: str, sarga: int, verse_number: int)`: 
+    - Use ONLY if the user specifically asks for a verse ID or if you need to deep-dive into a known location.
 
-### GUIDELINES
-1.  **Analyze**: Identify the core *conflict* or *dilemma*.
-2.  **Bridge to Archetypes**: Map the modern problem to specific Ramayana episodes.
-3.  **Plan Tasks**: Create 3-5 unique, directed research steps.
+### **STRATEGY GUIDELINES**
+1.  **Start Broad**: Almost always start with `search_chapters` to ground the topic in specific Kandas.
+2.  **Drill Down**: Follow up with `search_principles` or `search_narrative` for specific citations.
+3.  **Be Precise**: In `tool_args`, ensure keys match the tool definitions above (e.g., use "query", not "q").
 
-### EXAMPLES (Study these patterns)
-Query: "How was the prosperity in Dasharatha's rule?"
-Plan:
-[
-  "Use search_chapters to get a macro view of Ayodhya's prosperity in Bala Kanda and Ayodhya Kanda",
-  "Search for specific verses in Bala Kanda Sarga 6 describing the city's wealth and citizens",
-  "Search for descriptions of Rama's rule in Uttara Kanda to compare with Dasharatha's",
-  "Synthesize a report on hierarchical prosperity from King to Citizen"
-]
-
-### OUTPUT FORMAT
-Return ONLY a JSON list of strings.
+### **EXAMPLE PLAN**
+Query: "How did Rama handle grief?"
+Steps:
+1. { "tool_name": "search_chapters", "tool_args": { "query": "Rama grief lamentation forest" }, "description": "Identify which Sargas contain Rama's grief." }
+2. { "tool_name": "search_principles", "tool_args": { "query": "Rama grieving for Sita" }, "description": "Find specific verses showing his emotional state." }
+3. { "tool_name": "search_narrative", "tool_args": { "query": "Rama cries", "speaker": "Rama" }, "description": "Find narrative descriptions of his actions." }
 """
 
-# Synthesizer Prompt
+# Synthesizer Prompt (Unchanged)
 SYNTHESIZER_SYSTEM_PROMPT = """You are 'The Digital Rishi', a strict scholar of the *provided* Ramayana text.
 
 ### **⛔ CRITICAL INSTRUCTION: STRICT GROUNDING ONLY ⛔**
@@ -135,7 +140,6 @@ def planner_node(state: DeepAgentState):
     if not query and state["messages"]:
         last_msg = state["messages"][-1]
         if isinstance(last_msg, HumanMessage) or isinstance(last_msg, tuple):
-             # Handle potential tuple format from server.py input
              content = last_msg[1] if isinstance(last_msg, tuple) else last_msg.content
              query = content
     
@@ -148,12 +152,15 @@ def planner_node(state: DeepAgentState):
     
     plan_obj = planner_llm.invoke(messages)
     
-    # Log the plan as an AI message so user sees it
-    plan_text = "I have developed a research plan:\n" + "\n".join([f"{i+1}. {step}" for i, step in enumerate(plan_obj.steps)])
+    # Store steps as dictionaries for state compatibility
+    steps_as_dicts = [step.model_dump() for step in plan_obj.steps]
+    
+    # Log the plan as text for the UI
+    plan_text = "I have developed a research plan:\n" + "\n".join([f"{i+1}. {step.description}" for i, step in enumerate(plan_obj.steps)])
     
     return {
         "query": query,
-        "plan": plan_obj.steps,
+        "plan": steps_as_dicts, # Now a list of dicts, not strings
         "past_steps": [],
         "current_step_index": 0,
         "research_log": [],
@@ -161,61 +168,63 @@ def planner_node(state: DeepAgentState):
     }
 
 def executor_node(state: DeepAgentState):
-    """Executes the current step in the plan."""
+    """Executes the current step in the plan directly."""
     print("\n" + "-"*50, flush=True)
-    print("--- 🕵️ RESEARCHER NODE ---", flush=True)
+    print("--- ⚡ FAST EXECUTION NODE ---", flush=True)
     print("-"*50, flush=True)
+    
     idx = state["current_step_index"]
     plan = state["plan"]
     
     if idx >= len(plan):
-        return {"current_step_index": idx + 1} # Should go to synthesizer
+        return {"current_step_index": idx + 1}
         
-    current_task = plan[idx]
-    print(f"EXECUTING STEP {idx+1}/{len(plan)}: {current_task}", flush=True)
-    print("Starting Deep Search sub-agent...", flush=True)
+    step_data = plan[idx] # This is now a dict: {description, tool_name, tool_args}
+    description = step_data.get("description", "Unknown Step")
+    tool_name = step_data.get("tool_name")
+    tool_args = step_data.get("tool_args", {})
     
-    # We use a mini ReAct agent to solve this specific task
-    # SYSTEM PROMPT for the mini-researcher to avoid infinite loops and stay concise
-    RESEARCHER_SYSTEM_PROMPT = """You are a focused research assistant for the Valmiki Ramayana.
-    1. **ACCURACY OVER SPEED**: When you find a relevant chapter, you MUST look for the specific VERSE NUMBER (Shloka) in the text. 
-    2. **REPORT NUMBERS**: In your final summary for a step, always include the Kanda Name, Sarga Number, and Shloka Number (e.g. Ayodhya 10:1) so the Synthesizer can cite it correctly.
-    3. **NO GUESSING**: If you cannot find a specific verse or the search returns no results, you MUST report "No relevant verses found for this query". Do NOT invent verses.
-    4. **EFFICIENCY**: If a search query returns nothing, try AT MOST 2 variations, then move to the next task."""
+    print(f"EXECUTING STEP {idx+1}: {description}", flush=True)
+    print(f"  -> Calling: {tool_name}({tool_args})", flush=True)
+    
+    # Direct Function Mapping
+    # Securely map string names to actual imported functions
+    available_tools = {
+        "search_principles": search_principles,
+        "search_narrative": search_narrative,
+        "get_verse_context": get_verse_context,
+        "search_chapters": search_chapters
+    }
+    
+    output = ""
+    try:
+        if tool_name in available_tools:
+            # EXECUTE DIRECTLY
+            tool_func = available_tools[tool_name]
+            # Unwrap args if they match function signature?
+            # LangChain tools usually take a single string input or strict kwargs.
+            # Our tools are defined with @tool. 
+            # If they are LangChain StructuredTools, we can call .invoke(tool_args)
+            
+            # Let's check tools.py. They are @tool decorated functions.
+            # We can invoke them using the standard .invoke() pattern or direct call if we handle args.
+            # Safest is .invoke(tool_args) as it handles validation
+            
+            output = tool_func.invoke(tool_args)
+        else:
+            output = f"Error: Tool '{tool_name}' not found."
+    except Exception as e:
+        output = f"Error executing {tool_name}: {e}"
+        print(f"  ❌ Execution Failed: {e}", flush=True)
 
-    tools = [search_principles, search_narrative, get_verse_context, search_chapters]
-    mini_agent = create_react_agent(llm, tools)
+    # Logging: Raw Data Injection (Same as before, but even cleaner)
+    log_entry = f"## Step {idx+1}: {description}\n### 🛡️ RAW DATABASE RESULTS (TRUTH):\n{output}\n"
     
-    # Run mini-agent with an explicit recursion limit
-    # We prepend the system prompt directly to the messages for compatibility
-    result = mini_agent.invoke(
-        {"messages": [SystemMessage(content=RESEARCHER_SYSTEM_PROMPT), HumanMessage(content=current_task)]},
-        config={"recursion_limit": 100}
-    )
-    
-    # --- RAW DATA INJECTION ---
-    # We capture the RAW output from the tools to ensure 100% fidelity.
-    # This prevents the Researcher LLM from prioritizing summary over specific verse IDs.
-    tool_outputs = []
-    for msg in result["messages"]:
-        if isinstance(msg, ToolMessage):
-             prefix = f"🔌 TOOL OUTPUT ({msg.name}):"
-             tool_outputs.append(f"{prefix}\n{msg.content}")
-
-    agent_response = result["messages"][-1].content
-    
-    if tool_outputs:
-        raw_data_block = "\n\n".join(tool_outputs)
-        log_entry = f"## Step {idx+1}: {current_task}\n\n### 🛡️ RAW DATABASE RESULTS (TRUTH):\n{raw_data_block}\n\n### 🤖 Researcher Summary:\n{agent_response}\n"
-    else:
-        # Fallback if no tools were called (pure reasoning)
-        log_entry = f"## Step {idx+1}: {current_task}\nResult: {agent_response}\n"
-
-    new_past_steps = state.get("past_steps", []) + [current_task]
+    new_past_steps = state.get("past_steps", []) + [description]
     new_research_log = state.get("research_log", []) + [log_entry]
     
-    # Notify user of progress (streamed)
-    progress_msg = f"Completed Step {idx+1}: {current_task}"
+    # Notify user of progress
+    progress_msg = f"Completed: {description}"
     
     return {
         "past_steps": new_past_steps,
