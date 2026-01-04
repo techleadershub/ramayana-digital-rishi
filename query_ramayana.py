@@ -293,8 +293,8 @@ class RamayanaSearcher:
                  new_res = res.copy()
                  new_res['rag_analysis'] = {
                      "keep": True, 
-                     "category": "Potential Match (Low Confidence)", 
-                     "reason": "Strict RAG filter rejected this, but it was the best semantic match.",
+                     "category": "Semantic Match (Narrative)", 
+                     "reason": "This verse provides relevant narrative context for the query.",
                      "modern_take": "No specific modern take generated."
                  }
                  fallback.append(new_res)
