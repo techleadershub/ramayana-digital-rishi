@@ -287,14 +287,17 @@ class RamayanaSearcher:
         # This prevents the "I found nothing" response which frustrates users.
         if not final_results and raw_results:
              print("   ⚠️ Strict filter removed all results. Falling back to top 5 raw matches.", flush=True)
-             fallback = raw_results[:5]
-             for res in fallback:
-                 res['rag_analysis'] = {
+             fallback = []
+             for res in raw_results[:5]:
+                 # clone to avoid reference issues
+                 new_res = res.copy()
+                 new_res['rag_analysis'] = {
                      "keep": True, 
                      "category": "Potential Match (Low Confidence)", 
                      "reason": "Strict RAG filter rejected this, but it was the best semantic match.",
                      "modern_take": "No specific modern take generated."
                  }
+                 fallback.append(new_res)
              return fallback
 
         return final_results[:final_limit]
