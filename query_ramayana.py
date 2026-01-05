@@ -38,36 +38,36 @@ class OpenAILLM:
 
         {verses_text}
 
-        TASK: IDENTIFY ONLY UNIVERSAL WISDOM ("SUBHASHITAS").
+        TASK: FILTER AND CATEGORIZE FOR RELEVANCE.
         
-        We are building a "Book of General Leadership Quotes". 
-        WE MUST REJECT 95% of the verses because they are narrative (story-telling).
+        We are building a "Deep Research Agent" that provides both WISDOM and NARRATIVE EXAMPLES.
+        
+        CRITERIA FOR 'KEEP':
+        1. **Direct Relevance**: Does this verse answer the query?
+        2. **Narrative Evidence**: Does this story beat ILLUSTRATE the query? (e.g. If query is "anger", a verse showing Rama angry is RELEVANT).
+        3. **Universal Wisdom**: Is it a general maxim?
         
         EXAMPLES:
         -----------------------
-        Verse: "Rama, the son of Dasaratha, took his bow and looked at the ocean."
-        -> REJECT (Narrative/Descriptive)
+        Query: "Leadership"
+        Verse: "Rama led the army with care, checking on every soldier."
+        -> KEEP (Category: "Narrative Example" - shows leadership in action)
         
-        Verse: "Sugriva said to Angada: 'Go south and find Sita'."
-        -> REJECT (Specific Instruction/Dialog)
+        Query: "Dharma"
+        Verse: "Dharma protects those who protect it."
+        -> KEEP (Category: "Wisdom" - definition)
         
-        Verse: "Enthusiasm is the root of prosperity; there is no greater enemy than laziness."
-        -> KEEP (Universal Maxim)
-        
-        Verse: "A king who does not protect his subjects is like a barren cloud."
-        -> KEEP (Universal Principle)
+        Query: "Grief"
+        Verse: "And then searching for Sita, he saw a flower."
+        -> REJECT (Too trivial/incidental, unless specifically asked for flowers)
         -----------------------
 
-        INSTRUCTIONS FOR EACH VERSE:
-        1. "Is this a story beat (action/dialog)?" -> If YES, DISCARD immediately.
-        2. "Does it mention specific names (Rama, Sugriva, Ravana) as the *subject* of the action?" -> If YES, DISCARD (usually).
-        3. "Is it a general rule asking 'How should one behave?'" -> If YES, KEEP.
-        
         Output ONLY JSON:
         {{
             "results": [
-                {{ "index": 1, "keep": false, "category": "Narrative", "reason": "Describes specific action of a character" }},
-                {{ "index": 2, "keep": true,  "category": "Wisdom",    "reason": "Universal rule about [Topic]", "modern_take": "..." }}
+                {{ "index": 1, "keep": false, "category": "Irrelevant", "reason": "Unrelated details" }},
+                {{ "index": 2, "keep": true,  "category": "Wisdom",    "reason": "Defines core principle", "modern_take": "..." }},
+                {{ "index": 3, "keep": true,  "category": "Narrative", "reason": "Shows character displaying [trait]", "modern_take": "..." }}
             ]
         }}
         """
@@ -75,7 +75,7 @@ class OpenAILLM:
         try:
             completion = self.client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "You are a ruthless editor. You REJECT almost everything. You NEVER hallucinates a lesson from a simple description."},
+                    {"role": "system", "content": "You are a helpful Research Assistant. You categorize verses based on their relevance to the user's query."},
                     {"role": "user", "content": prompt}
                 ],
                 model=self.model,
