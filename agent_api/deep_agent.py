@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Annotated
+from typing import TypedDict, List, Annotated, Literal, Optional
 import operator
 import json
 import os
@@ -30,8 +30,14 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 class ResearchStep(BaseModel):
     description: str = Field(description="Human readable description of this step (e.g. 'Search for Aranya Kanda context')")
-    tool_name: str = Field(description="The exact name of the tool to use. Options: 'search_chapters', 'search_principles', 'search_narrative', 'get_verse_context'")
-    tool_args: dict = Field(default_factory=dict, description="JSON dictionary of arguments for the tool (e.g. {'query': '...'})")
+    tool_name: Literal['search_chapters', 'search_principles', 'search_narrative', 'get_verse_context'] = Field(description="The exact name of the tool to call.")
+    
+    # Flattened Arguments (LLM populates these directly, we construct the dict later)
+    query: Optional[str] = Field(description="The search query (for search tools).", default=None)
+    speaker: Optional[str] = Field(description="Speaker filter (for search_narrative only).", default=None)
+    kanda: Optional[str] = Field(description="Kanda name (for get_verse_context).", default=None)
+    sarga: Optional[int] = Field(description="Sarga number (for get_verse_context).", default=None)
+    verse_number: Optional[int] = Field(description="Verse number (for get_verse_context).", default=None)
 
 class Plan(BaseModel):
     steps: List[ResearchStep] = Field(description="A list of 4-7 structured research steps. Use more steps for complex queries.")
@@ -42,17 +48,21 @@ planner_llm = llm.with_structured_output(Plan, method="function_calling")
 PLANNER_SYSTEM_PROMPT = """You are the 'Strategist' for a Ramayana AI Scholar.
 Your goal is to break down a user query into a series of **DIRECT TOOL EXECUTIONS**.
 
-### **AVAILABLE TOOLS (Use these exactly)**
-1.  `search_chapters(query: str)`: 
+### **AVAILABLE TOOLS**
+1.  `search_chapters`: 
+    - **Args**: `query`
     - Best for **MACRO** context. Use this FIRST for broad topics (e.g., "Prosperity", "Dharma", "Kingdom").
     - Returns summary of relevant Sargas.
-2.  `search_principles(query: str)`: 
+2.  `search_principles`: 
+    - **Args**: `query`
     - Best for **MICRO** analysis of topics, ethics, and wisdom.
     - Use for queries like: "leadership", "sisterhood", "vows", "anger".
-3.  `search_narrative(query: str, speaker: str = None)`: 
+3.  `search_narrative`: 
+    - **Args**: `query`, `speaker` (optional)
     - Best for **STORY** events and dialogue.
     - Use for: "What happened when...", "What did Rama say to...", "Story of Golden Deer".
-4.  `get_verse_context(kanda: str, sarga: int, verse_number: int)`: 
+4.  `get_verse_context`: 
+    - **Args**: `kanda`, `sarga`, `verse_number`
     - Use ONLY if the user specifically asks for a verse ID or if you need to deep-dive into a known location.
 
 ### **STRATEGY GUIDELINES**
@@ -60,25 +70,25 @@ Your goal is to break down a user query into a series of **DIRECT TOOL EXECUTION
 2.  **Start Broad**: Almost always start with `search_chapters` to ground the topic in specific Kandas.
 3.  **Drill Down**: Follow up with `search_principles` or `search_narrative` for specific citations.
 4.  **Cross-Reference**: search for multiple angles (e.g. "Rama's view" AND "Sita's view").
-5.  **Be Precise**: In `tool_args`, ensure keys match the tool definitions above (e.g., use "query", not "q").
+5.  **Argument Population**: Accurately populate the fields (`query`, `speaker`, etc.) for each step.
 
 ### **EXAMPLES**
 
 **Query 1 (Simple)**: "How did Rama handle grief?"
 Steps:
-1. { "tool_name": "search_chapters", "tool_args": { "query": "Rama grief lamentation forest" }, "description": "Identify which Sargas contain Rama's grief." }
-2. { "tool_name": "search_principles", "tool_args": { "query": "Rama grieving for Sita" }, "description": "Find specific verses showing his emotional state." }
-3. { "tool_name": "search_narrative", "tool_args": { "query": "Rama cries", "speaker": "Rama" }, "description": "Find narrative descriptions of his actions." }
-4. { "tool_name": "search_principles", "tool_args": { "query": "stoicism vs grief distinction" }, "description": "Analyze if he maintained composure." }
+1. { "tool_name": "search_chapters", "query": "Rama grief lamentation forest", "description": "Identify which Sargas contain Rama's grief." }
+2. { "tool_name": "search_principles", "query": "Rama grieving for Sita", "description": "Find specific verses showing his emotional state." }
+3. { "tool_name": "search_narrative", "query": "Rama cries", "speaker": "Rama", "description": "Find narrative descriptions of his actions." }
+4. { "tool_name": "search_principles", "query": "stoicism vs grief distinction", "description": "Analyze if he maintained composure." }
 
 **Query 2 (Complex)**: "Compare the leadership styles of Rama and Ravana."
 Steps:
-1. { "tool_name": "search_chapters", "tool_args": { "query": "Rama kingly duties Ayodhya" }, "description": "Identify chapters showing Rama's ruling style." }
-2. { "tool_name": "search_chapters", "tool_args": { "query": "Ravana council war room" }, "description": "Identify chapters showing Ravana's interaction with ministers." }
-3. { "tool_name": "search_principles", "tool_args": { "query": "Rama dharma leadership" }, "description": "Search for Rama's principles of governance." }
-4. { "tool_name": "search_principles", "tool_args": { "query": "Ravana arrogance king" }, "description": "Search for Ravana's principles of power." }
-5. { "tool_name": "search_narrative", "tool_args": { "query": "Vibheeshana advice to Ravana" }, "description": "Find narrative where Ravana rejects advice (Contrast)." }
-6. { "tool_name": "search_narrative", "tool_args": { "query": "Rama consults Lakshmana" }, "description": "Find narrative where Rama seeks counsel." }
+1. { "tool_name": "search_chapters", "query": "Rama kingly duties Ayodhya", "description": "Identify chapters showing Rama's ruling style." }
+2. { "tool_name": "search_chapters", "query": "Ravana council war room", "description": "Identify chapters showing Ravana's interaction with ministers." }
+3. { "tool_name": "search_principles", "query": "Rama dharma leadership", "description": "Search for Rama's principles of governance." }
+4. { "tool_name": "search_principles", "query": "Ravana arrogance king", "description": "Search for Ravana's principles of power." }
+5. { "tool_name": "search_narrative", "query": "Vibheeshana advice to Ravana", "description": "Find narrative where Ravana rejects advice (Contrast)." }
+6. { "tool_name": "search_narrative", "query": "Rama consults Lakshmana", "description": "Find narrative where Rama seeks counsel." }
 """
 
 # Synthesizer Prompt (Unchanged)
@@ -98,7 +108,7 @@ Even if the findings are only tangentially related, you must **construct** the b
 You must cite every key claim with a clickable citation.
 **Format**: `[[Verse: <Kanda Name> <Sarga>:<Shloka>]]`
 
-1.  **Specific Verse**: If you have the shloka number (e.g., 10), use:
+1.  **Specific Verse**: If you have the shloka number (e.g. 10), use:
     `[[Verse: Ayodhya Kanda 10:10]]`
     *DO NOT default to 1:1 unless it is actually Verse 1.*
 
@@ -167,39 +177,7 @@ def planner_node(state: DeepAgentState):
         HumanMessage(content=query)
     ]
     
-    # Store steps directly as objects for internal use if needed, 
-    # BUT for the frontend stream and state compatibility (which expects strings), 
-    # we must map back to strings or update the frontend. 
-    # Safest quick fix: Use the description strings for the "plan" state variable.
-    # We can store the full structured plan in a separate state key if we really needed it for execution,
-    # but logically, the executor just needs to know what to do.
-    # WAIT! The executor_node reads `state["plan"]`. If we change this to strings, the executor breaks!
-    # Correct Apporach:
-    # 1. Keep state["plan"] as Objects (dicts) for the Executor.
-    # 2. BUT the server.py `chat_stream` reads generic events.
-    # ERROR ANALYSIS: The error is happening in the UI reacting to the "plan" event type.
-    # We need to check how server.py yields the plan.
-    
-    # Let's look at how we return state here. 
-    # If we return dicts here, state["plan"] becomes dicts. 
-    # The executor expects dicts (per our v2 update).
-    # The UI receives JSON chunks.
-    
-    # We must ensure the Executor uses the structured data, 
-    # but we might need to change how we yield it? 
-    # or just make the description the plan for the UI?
-    
-    # Actually, the user's error says: "object with keys {description, tool_name, tool_args}"
-    # This means the UI received the Dicts.
-    
-    # HYBRID FIX:
-    # We will serialize the plan as a List of Dicts for the state (so Executor works).
-    # BUT we need to handle the UI.
-    
-    # Let's revert to sending Strings in the 'plan' field for the Agent State if possible?
-    # No, Executor needs the args.
-    
-    # Invoke the planner LLM
+    # invoke the planner LLM
     plan_obj = planner_llm.invoke(messages)
 
     # Convert plan to text for the message history
@@ -231,10 +209,22 @@ def executor_node(state: DeepAgentState):
     if idx >= len(plan):
         return {"current_step_index": idx + 1}
         
-    step_data = plan[idx] # This is now a dict: {description, tool_name, tool_args}
+    step_data = plan[idx] 
     description = step_data.get("description", "Unknown Step")
     tool_name = step_data.get("tool_name")
-    tool_args = step_data.get("tool_args", {})
+    
+    # Construct tool_args dynamically from the flattened step data
+    tool_args = {}
+    if step_data.get("query"):
+        tool_args["query"] = step_data["query"]
+    if step_data.get("speaker"):
+        tool_args["speaker"] = step_data["speaker"]
+    if step_data.get("kanda"):
+        tool_args["kanda"] = step_data["kanda"]
+    if step_data.get("sarga"):
+        tool_args["sarga"] = step_data["sarga"]
+    if step_data.get("verse_number"):
+        tool_args["verse_number"] = step_data["verse_number"]
     
     print(f"EXECUTING STEP {idx+1}: {description}", flush=True)
     print(f"  -> Calling: {tool_name}({tool_args})", flush=True)
@@ -253,15 +243,6 @@ def executor_node(state: DeepAgentState):
         if tool_name in available_tools:
             # EXECUTE DIRECTLY
             tool_func = available_tools[tool_name]
-            # Unwrap args if they match function signature?
-            # LangChain tools usually take a single string input or strict kwargs.
-            # Our tools are defined with @tool. 
-            # If they are LangChain StructuredTools, we can call .invoke(tool_args)
-            
-            # Let's check tools.py. They are @tool decorated functions.
-            # We can invoke them using the standard .invoke() pattern or direct call if we handle args.
-            # Safest is .invoke(tool_args) as it handles validation
-            
             output = tool_func.invoke(tool_args)
         else:
             output = f"Error: Tool '{tool_name}' not found."
