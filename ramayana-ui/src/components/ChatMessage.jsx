@@ -139,6 +139,28 @@ export default function ChatMessage({ message, onVerseClick }) {
                 <div className="prose prose-lg prose-orange max-w-none text-slate-700 leading-relaxed font-sans">
                     <Markdown
                         components={{
+                            // Premium Headers: Distinct serif styling with consistent color hierarchy
+                            h1: ({ node, ...props }) => <h1 className="font-serif text-2xl font-bold text-slate-900 mt-6 mb-4 pb-2 border-b border-orange-100" {...props} />,
+                            h2: ({ node, ...props }) => <h2 className="font-serif text-xl font-semibold text-slate-800 mt-5 mb-3" {...props} />,
+                            h3: ({ node, ...props }) => <h3 className="font-serif text-lg font-medium text-orange-900 mt-4 mb-2 uppercase tracking-wide text-xs" {...props} />,
+
+                            // Wisdom Blockquotes: Premium inlaid style for quotes
+                            blockquote: ({ node, ...props }) => (
+                                <blockquote className="border-l-4 border-orange-400 pl-4 py-2 my-6 bg-orange-50/50 rounded-r-lg italic font-serif text-slate-700 leading-loose shadow-[inset_0_0_20px_rgba(251,146,60,0.05)] text-base" {...props} />
+                            ),
+
+                            // Highlighted Keywords: Subtle orange emphasis
+                            strong: ({ node, ...props }) => <strong className="font-semibold text-orange-700" {...props} />,
+
+                            // Lists: Clean spacing with custom markers
+                            ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-6 space-y-2 my-4 marker:text-orange-400" {...props} />,
+                            ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-6 space-y-2 my-4 marker:text-orange-600 marker:font-bold" {...props} />,
+                            li: ({ node, ...props }) => <li className="pl-2" {...props} />,
+
+                            // Separator
+                            hr: ({ node, ...props }) => <hr className="my-8 border-orange-100" {...props} />,
+
+                            // Citation Renderer
                             a: ({ node, href, children, ...props }) => {
                                 if (href && href.startsWith('http://citation/')) {
                                     // href format: http://citation/Kanda%20Name/Sarga/Shloka
@@ -164,20 +186,20 @@ export default function ChatMessage({ message, onVerseClick }) {
                                                 onVerseClick(kanda, sarga, shloka);
                                             }}
                                             className={clsx(
-                                                "relative z-[1000] inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded-md text-xs font-bold transition-all border shadow-sm pointer-events-auto",
+                                                "relative z-[1000] inline-flex items-center gap-1.5 mx-1 px-2.5 py-0.5 rounded-full text-xs font-bold transition-all border shadow-sm pointer-events-auto transform hover:-translate-y-0.5",
                                                 isChapterRef
-                                                    ? "bg-orange-50 text-orange-600 border-orange-100 cursor-default opacity-80" // Non-clickable style
-                                                    : "bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-300 cursor-pointer" // Clickable style
+                                                    ? "bg-slate-50 text-slate-500 border-slate-200 cursor-default opacity-80" // Non-clickable style
+                                                    : "bg-gradient-to-r from-orange-50 to-orange-100 text-orange-800 hover:from-orange-100 hover:to-orange-200 border-orange-200 hover:border-orange-300 hover:shadow-orange-100 cursor-pointer" // Clickable premium style
                                             )}
                                             title={isChapterRef ? "Chapter Summary" : "Tap to read verse"}
                                             type="button"
                                         >
-                                            <Sparkles size={10} className="text-orange-500" />
+                                            <Sparkles size={10} className={isChapterRef ? "text-slate-400" : "text-orange-500"} />
                                             {label}
                                         </button>
                                     );
                                 }
-                                return <a href={href} {...props}>{children}</a>
+                                return <a href={href} {...props} className="text-orange-600 hover:underline decoration-offset-2 font-medium">{children}</a>
                             }
                         }}
                     >
