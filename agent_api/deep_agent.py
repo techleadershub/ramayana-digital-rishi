@@ -50,19 +50,20 @@ Your goal is to break down a user query into a series of **DIRECT TOOL EXECUTION
 
 ### **AVAILABLE TOOLS**
 1.  `search_chapters`: 
-    - **Args**: `query`
+    - **Required**: `query`
     - Best for **MACRO** context. Use this FIRST for broad topics (e.g., "Prosperity", "Dharma", "Kingdom").
     - Returns summary of relevant Sargas.
 2.  `search_principles`: 
-    - **Args**: `query`
+    - **Required**: `query`
     - Best for **MICRO** analysis of topics, ethics, and wisdom.
     - Use for queries like: "leadership", "sisterhood", "vows", "anger".
 3.  `search_narrative`: 
-    - **Args**: `query`, `speaker` (optional)
+    - **Required**: `query`
+    - **Optional**: `speaker`
     - Best for **STORY** events and dialogue.
     - Use for: "What happened when...", "What did Rama say to...", "Story of Golden Deer".
 4.  `get_verse_context`: 
-    - **Args**: `kanda`, `sarga`, `verse_number`
+    - **Required**: `kanda`, `sarga`, `verse_number`
     - Use ONLY if the user specifically asks for a verse ID or if you need to deep-dive into a known location.
 
 ### **STRATEGY GUIDELINES**
@@ -70,7 +71,7 @@ Your goal is to break down a user query into a series of **DIRECT TOOL EXECUTION
 2.  **Start Broad**: Almost always start with `search_chapters` to ground the topic in specific Kandas.
 3.  **Drill Down**: Follow up with `search_principles` or `search_narrative` for specific citations.
 4.  **Cross-Reference**: search for multiple angles (e.g. "Rama's view" AND "Sita's view").
-5.  **Argument Population**: Accurately populate the fields (`query`, `speaker`, etc.) for each step.
+5.  **Argument Population**: **CRITICAL**: You MUST explicitly popluate the `query` field for search tools. Do not leave it empty.
 
 ### **EXAMPLES**
 
@@ -225,6 +226,31 @@ def executor_node(state: DeepAgentState):
         tool_args["sarga"] = step_data["sarga"]
     if step_data.get("verse_number"):
         tool_args["verse_number"] = step_data["verse_number"]
+    
+    # --- STRICT VALIDATION & SELF-HEALING ---
+    # 1. Search Tools Validation
+    search_tools = ["search_chapters", "search_principles", "search_narrative"]
+    if tool_name in search_tools:
+        if not tool_args.get("query"):
+            print(f"  ⚠️ CRITICAL WARNING: 'query' argument missing for {tool_name}. Applying self-healing.", flush=True)
+            # Self-Healing: Use the global user query
+            tool_args["query"] = state["query"]
+            print(f"    -> Auto-filled query: '{state['query']}'")
+            
+    # 2. Context Tool Validation
+    if tool_name == "get_verse_context":
+        if "kanda" not in tool_args or "sarga" not in tool_args:
+             err_msg = f"  ❌ Error: Missing kanda/sarga for get_verse_context. Cannot auto-heal."
+             print(err_msg, flush=True)
+             
+             # Return early with error log
+             log_entry = f"## Step {idx+1}: {description}\n### ⚠️ EXECUTION ERROR:\nMissing required location arguments.\n"
+             return {
+                "past_steps": state.get("past_steps", []) + [description + " (Failed)"],
+                "research_log": state.get("research_log", []) + [log_entry],
+                "current_step_index": idx + 1,
+                "messages": [AIMessage(content=f"Skipped step due to missing args: {description}")]
+            }
     
     print(f"EXECUTING STEP {idx+1}: {description}", flush=True)
     print(f"  -> Calling: {tool_name}({tool_args})", flush=True)
